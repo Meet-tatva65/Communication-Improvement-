@@ -1,5 +1,6 @@
 import React from 'react';
 import { AnalysisResult, Mistake } from '../types';
+import { DownloadIcon } from './icons';
 
 interface HighlightedTextProps {
   text: string;
@@ -46,8 +47,33 @@ const HighlightedText: React.FC<HighlightedTextProps> = ({ text, mistakes }) => 
 };
 
 export const ResultsCard: React.FC<{ result: AnalysisResult }> = ({ result }) => {
+  const handleExport = () => {
+    const dataStr = JSON.stringify(result, null, 2);
+    const dataBlob = new Blob([dataStr], { type: "application/json" });
+    const url = window.URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'RateMySpeak_analysis.json';
+    document.body.appendChild(link); // Required for Firefox
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="w-full max-w-6xl flex flex-col gap-8 animate-fade-in">
+      {/* Header with Export Button */}
+      <div className="flex justify-between items-center pb-4 border-b border-gray-700">
+        <h2 className="text-3xl font-bold text-gray-100">Analysis Report</h2>
+        <button
+          onClick={handleExport}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-75 transition-colors"
+        >
+          <DownloadIcon className="w-5 h-5" />
+          Export JSON
+        </button>
+      </div>
+
       {/* Top Section: Dashboard */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         

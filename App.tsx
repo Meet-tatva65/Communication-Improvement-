@@ -107,7 +107,7 @@ export default function App() {
     <main className="min-h-screen w-full flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 bg-gray-900 text-white">
       <div className="text-center mb-10">
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
-          Audio <span className="text-indigo-400">Performance Analyzer</span>
+          Rate<span className="text-indigo-400">My</span>Speak
         </h1>
         <p className="text-lg text-gray-400 mt-3 max-w-2xl mx-auto">
           Upload a conversation audio to get AI-powered feedback on your communication skills.
