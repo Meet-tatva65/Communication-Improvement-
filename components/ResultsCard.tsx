@@ -47,13 +47,165 @@ const HighlightedText: React.FC<HighlightedTextProps> = ({ text, mistakes }) => 
 };
 
 export const ResultsCard: React.FC<{ result: AnalysisResult }> = ({ result }) => {
+  
+  const generateReportHtml = (analysisResult: AnalysisResult): string => {
+    const { overallScore, dimensionAnalysis, feedback } = analysisResult;
+
+    const dimensionsHtml = dimensionAnalysis
+      .map(
+        (dim) => `
+      <tr>
+        <td style="padding: 12px 15px; border-bottom: 1px solid #4A5568;">${dim.name}</td>
+        <td style="padding: 12px 15px; border-bottom: 1px solid #4A5568; text-align: right; font-weight: bold;">${dim.score.toFixed(1)} / 5</td>
+      </tr>
+    `
+      )
+      .join('');
+
+    const feedbackHtml = feedback
+      .map(
+        (item) => `
+      <li style="margin-bottom: 10px; line-height: 1.6;">${item}</li>
+    `
+      )
+      .join('');
+
+    return `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>RateMySpeak Analysis Report</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1A202C;
+            color: #E2E8F0;
+            margin: 0;
+            padding: 40px;
+          }
+          .container {
+            max-width: 800px;
+            margin: auto;
+            background-color: #2D3748;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            overflow: hidden;
+          }
+          header {
+            background-color: #4A5568;
+            padding: 30px;
+            text-align: center;
+          }
+          h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            color: #FFFFFF;
+          }
+          h1 span {
+            color: #7F9CF5;
+          }
+          .content {
+            padding: 30px;
+          }
+          .section {
+            margin-bottom: 40px;
+          }
+          h2 {
+            font-size: 1.8rem;
+            color: #A0AEC0;
+            border-bottom: 2px solid #4A5568;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+          }
+          .overall-score-card {
+            background-color: #1A202C;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+          }
+          .overall-score-card p {
+            margin: 0;
+            font-size: 1.1rem;
+            color: #A0AEC0;
+          }
+          .overall-score-card .score {
+            font-size: 5rem;
+            font-weight: bold;
+            color: #FFFFFF;
+            margin: 10px 0;
+          }
+          .overall-score-card .score span {
+            font-size: 2rem;
+            color: #718096;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+          th {
+            text-align: left;
+            padding: 12px 15px;
+            background-color: #4A5568;
+            color: #E2E8F0;
+          }
+          ul {
+            list-style-type: disc;
+            padding-left: 20px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <header>
+            <h1>Rate<span>My</span>Speak</h1>
+          </header>
+          <div class="content">
+            <div class="section">
+              <h2>Overall Score</h2>
+              <div class="overall-score-card">
+                <p>Context-weighted score</p>
+                <div class="score">${overallScore.toFixed(2)}<span>/5</span></div>
+              </div>
+            </div>
+            
+            <div class="section">
+              <h2>Dimension Analysis</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th style="border-top-left-radius: 8px; border-bottom-left-radius: 8px;">Dimension</th>
+                    <th style="text-align: right; border-top-right-radius: 8px; border-bottom-right-radius: 8px;">Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${dimensionsHtml}
+                </tbody>
+              </table>
+            </div>
+            
+            <div class="section">
+              <h2>Areas for Improvement</h2>
+              <ul>
+                ${feedbackHtml}
+              </ul>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  };
+
+
   const handleExport = () => {
-    const dataStr = JSON.stringify(result, null, 2);
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
+    const htmlContent = generateReportHtml(result);
+    const dataBlob = new Blob([htmlContent], { type: "text/html" });
     const url = window.URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'RateMySpeak_analysis.json';
+    link.download = 'RateMySpeak_Report.html';
     document.body.appendChild(link); // Required for Firefox
     link.click();
     document.body.removeChild(link);
@@ -70,7 +222,7 @@ export const ResultsCard: React.FC<{ result: AnalysisResult }> = ({ result }) =>
           className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-75 transition-colors"
         >
           <DownloadIcon className="w-5 h-5" />
-          Export JSON
+          Export Report
         </button>
       </div>
 
