@@ -1,178 +1,194 @@
-import { GoogleGenAI, Type } from '@google/genai';
-import { AnalysisResult, Dimension } from '../types';
+import { GoogleGenAI, Type } from "@google/genai";
+import { AnalysisResult, ComparisonResult, Dimension } from '../types';
 
-const fileToGenerativePart = async (file: File) => {
-  const base64EncodedDataPromise = new Promise<string>((resolve) => {
+// Utility function to convert file to base64
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onloadend = () => {
-      if (typeof reader.result === 'string') {
-        resolve(reader.result.split(',')[1]);
-      }
-    };
     reader.readAsDataURL(file);
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = (error) => reject(error);
   });
-  return {
-    inlineData: { data: await base64EncodedDataPromise, mimeType: file.type },
-  };
+};
+
+const getAiClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API_KEY environment variable not set. Please set it in your Vercel project settings.");
+  }
+  return new GoogleGenAI({ apiKey });
 };
 
 const analysisSchema = {
-    type: Type.OBJECT,
-    properties: {
-        overallScore: {
-            type: Type.NUMBER,
-            description: "The single, overall context-weighted score from 0 to 5. Can be a decimal."
+  type: Type.OBJECT,
+  properties: {
+    overallScore: { type: Type.NUMBER, description: "An overall score from 0 to 5, can be decimal." },
+    dimensions: {
+      type: Type.ARRAY,
+      description: "Scores for specific communication dimensions.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          score: { type: Type.NUMBER },
         },
-        dimensionAnalysis: {
-            type: Type.ARRAY,
-            description: "An array of performance dimensions, each with its own score.",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    name: { type: Type.STRING, description: "Name of the dimension (e.g., 'Clarity in speaking')." },
-                    score: { type: Type.NUMBER, description: "Overall score for this dimension from 0 to 5." }
-                },
-                required: ['name', 'score']
-            }
-        },
-        feedback: {
-            type: Type.ARRAY,
-            description: "A list of specific, actionable feedback points for the user to improve their communication skills.",
-            items: {
-                type: Type.STRING
-            }
-        },
-        fillerWords: {
-            type: Type.ARRAY,
-            description: "A list of filler words used by the user and the count of each. If none, this should be an empty array.",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    word: { type: Type.STRING, description: "The filler word used (e.g., 'um', 'like')." },
-                    count: { type: Type.INTEGER, description: "How many times the filler word was used." }
-                },
-                required: ['word', 'count']
-            }
-        },
-        conversation: {
-            type: Type.ARRAY,
-            description: "A turn-by-turn transcript of the conversation.",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    speaker: { type: Type.STRING, enum: ['User', 'AI'] },
-                    text: { type: Type.STRING, description: "The transcribed text for this turn." },
-                    mistakes: {
-                        type: Type.ARRAY,
-                        description: "A list of identified mistakes in the user's speech for this turn. Empty if no mistakes.",
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                incorrectPhrase: { type: Type.STRING, description: "The exact phrase from the text that is incorrect." },
-                                correction: { type: Type.STRING, description: "The suggested correction for the phrase." },
-                                explanation: { type: Type.STRING, description: "A brief explanation of the mistake." }
-                            },
-                            required: ['incorrectPhrase', 'correction', 'explanation']
-                        }
-                    }
-                },
-                required: ['speaker', 'text']
-            }
-        }
+        required: ["name", "score"],
+      },
     },
-    required: ['overallScore', 'dimensionAnalysis', 'feedback', 'fillerWords', 'conversation']
-};
-
-const prompt = `
-You are an expert communication coach with a PhD in linguistics. Analyze the provided audio file of a conversation between a 'User' and an 'AI', focusing exclusively on the User's speech.
-
-Your analysis must be a deep, multi-faceted evaluation of their communication skills. Your entire output must be a single JSON object conforming to the provided schema.
-
-1.  **Overall Score**: Provide a single, context-weighted overall score from 0.0 to 5.0.
-
-2.  **Dimension Analysis**: Evaluate the user across the following 6 dimensions. For each, provide an overall score from 0.0 to 5.0.
-    *   Clarity in speaking
-    *   Grasping and then answering
-    *   Understanding
-    *   Language Proficiency
-    *   Conciseness
-    *   Speaking up to the topic
-
-3.  **Conversation Transcript**: Provide a full, turn-by-turn transcript of the entire conversation. For each turn, specify the speaker ('User' or 'AI') and the text.
-    *   **Mistake Highlighting**: For the User's turns ONLY, identify any grammatical errors, awkward phrasing, or idiomatic mistakes. For each mistake, specify the exact \`incorrectPhrase\`, a suggested \`correction\`, and a brief \`explanation\`. If there are no mistakes in a turn, the \`mistakes\` array should be empty or omitted.
-
-4.  **Actionable Feedback**: Provide a list of 5-10 specific, bullet-point style feedback items for improvement based on your analysis.
-
-5.  **Filler Words**: Identify the top 3-5 most frequently used filler words (e.g., 'um', 'uh', 'like') and provide a count for each. If none are used, return an empty array.
-
-Analyze the audio and return only the structured JSON.
-`;
-
-const performSingleAnalysis = async (ai: GoogleGenAI, audioPart: any): Promise<AnalysisResult> => {
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
-        contents: { parts: [audioPart, { text: prompt }] },
-        config: {
-            responseMimeType: 'application/json',
-            responseSchema: analysisSchema,
+    feedback: {
+      type: Type.ARRAY,
+      description: "Actionable feedback points.",
+      items: { type: Type.STRING },
+    },
+    fillerWords: {
+      type: Type.ARRAY,
+      description: "List of filler words used and their counts.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          word: { type: Type.STRING },
+          count: { type: Type.INTEGER },
         },
-    });
-
-    const jsonText = response.text.trim();
-    const result = JSON.parse(jsonText);
-    
-    if (!result.overallScore || !result.dimensionAnalysis || !result.feedback || !result.fillerWords || !result.conversation) {
-        throw new Error("Invalid response structure from API. Missing required fields.");
-    }
-    return result as AnalysisResult;
+        required: ["word", "count"],
+      },
+    },
+    conversation: {
+      type: Type.ARRAY,
+      description: "The full conversation transcript.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          speaker: { type: Type.STRING, enum: ["User", "AI"] },
+          text: { type: Type.STRING },
+          mistake: {
+            type: Type.OBJECT,
+            properties: {
+              incorrectPhrase: { type: Type.STRING },
+              suggestion: { type: Type.STRING },
+              explanation: { type: Type.STRING },
+            },
+            required: ["incorrectPhrase", "suggestion", "explanation"],
+          },
+        },
+        required: ["speaker", "text"],
+      },
+    },
+  },
+  required: ["overallScore", "dimensions", "feedback", "fillerWords", "conversation"],
 };
+
+const singleAnalysisPrompt = `You are a world-class speech and communication coach. Analyze the user's speech from the provided audio file, which contains a conversation between a 'User' and an 'AI'.
+
+Instructions:
+1.  Isolate and analyze ONLY the 'User's' speech.
+2.  Provide a full transcript of the entire conversation, labeling each part with 'User' or 'AI'.
+3.  For the 'User's' speech, identify any grammatical mistakes or awkward phrasing. For each mistake, provide the incorrect phrase, a suggested correction, and a brief explanation.
+4.  Rate the user on the following 6 dimensions on a scale of 0 to 5 (can be decimal): 'Clarity', 'Grasping & Answering', 'Understanding', 'Language Proficiency', 'Conciseness', and 'Speaking to the Topic'.
+5.  Calculate an 'overallScore' from 0 to 5, representing a weighted average of the dimensions.
+6.  Provide a list of the most frequently used filler words by the user and their counts.
+7.  Offer a bulleted list of 3-5 clear, actionable 'feedback' points for improvement.
+8.  Return the entire analysis in the specified JSON format.`;
 
 export const analyzeAudio = async (audioFile: File): Promise<AnalysisResult> => {
-  if (!process.env.API_KEY) {
-    throw new Error("Configuration Error: The API_KEY environment variable is not set. Please add it to your Vercel project's Environment Variables settings and redeploy.");
-  }
+  const ai = getAiClient();
+  const base64Audio = await fileToBase64(audioFile);
+  const audioPart = { inlineData: { mimeType: audioFile.type, data: base64Audio } };
+  const textPart = { text: singleAnalysisPrompt };
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const audioPart = await fileToGenerativePart(audioFile);
-  const analysisRuns = 3;
+  const callApi = async (): Promise<AnalysisResult> => {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-pro',
+      contents: { parts: [textPart, audioPart] },
+      config: { responseMimeType: "application/json", responseSchema: analysisSchema }
+    });
+    return JSON.parse(response.text.trim());
+  };
 
   try {
-    const analysisPromises: Promise<AnalysisResult>[] = [];
-    for (let i = 0; i < analysisRuns; i++) {
-        analysisPromises.push(performSingleAnalysis(ai, audioPart));
-    }
+    // Run 3 analyses in parallel for accuracy and average the scores
+    const results = await Promise.all([callApi(), callApi(), callApi()]);
 
-    const results = await Promise.all(analysisPromises);
+    const avgResult = results[0]; // Use the first result as the base for text content
     
-    // Use the first result for qualitative data (feedback, transcript, etc.)
-    const finalResult = { ...results[0] };
+    // Average overall score
+    avgResult.overallScore = parseFloat((results.reduce((acc, r) => acc + r.overallScore, 0) / results.length).toFixed(2));
+    
+    // Average dimension scores
+    avgResult.dimensions.forEach((dim, index) => {
+      const avgScore = results.reduce((acc, r) => acc + r.dimensions[index].score, 0) / results.length;
+      dim.score = parseFloat(avgScore.toFixed(2));
+    });
 
-    // Average the scores
-    const totalOverallScore = results.reduce((sum, result) => sum + result.overallScore, 0);
-    finalResult.overallScore = totalOverallScore / analysisRuns;
-
-    const averagedDimensions: Dimension[] = [];
-    if (finalResult.dimensionAnalysis) {
-        finalResult.dimensionAnalysis.forEach(dimension => {
-            const totalDimScore = results.reduce((sum, result) => {
-                const correspondingDim = result.dimensionAnalysis.find(d => d.name === dimension.name);
-                return sum + (correspondingDim ? correspondingDim.score : 0);
-            }, 0);
-            averagedDimensions.push({
-                name: dimension.name,
-                score: totalDimScore / analysisRuns
-            });
-        });
-        finalResult.dimensionAnalysis = averagedDimensions;
-    }
-
-    return finalResult;
+    return avgResult;
 
   } catch (error) {
-    console.error("Error analyzing audio with Gemini API:", error);
-    if (error instanceof Error) {
-        throw error;
-    }
-    throw new Error("An unknown error occurred during audio analysis.");
+    console.error("Error analyzing audio with Gemini:", error);
+    throw new Error("Failed to analyze audio. The model may have had trouble with the file.");
   }
+};
+
+
+const comparisonSchema = {
+    type: Type.OBJECT,
+    properties: {
+        dimensionChanges: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    oldScore: { type: Type.NUMBER },
+                    newScore: { type: Type.NUMBER },
+                },
+                required: ["name", "oldScore", "newScore"],
+            }
+        },
+        improvementSummary: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+        },
+        areasForNextFocus: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+        },
+    },
+    required: ["dimensionChanges", "improvementSummary", "areasForNextFocus"],
+};
+
+const comparisonPrompt = `You are a world-class speech and communication coach. You will be given two JSON objects representing two different speech analyses for the same user: an 'older' analysis and a 'newer' analysis. Your task is to compare the user's performance between the two.
+
+Instructions:
+1.  Compare the scores for each dimension between the old and new analyses. The JSON provides these scores directly.
+2.  Provide a bulleted 'improvementSummary' highlighting the key areas where the user has improved. Be specific and refer to the data. If performance worsened in some areas, state that genuinely.
+3.  Provide a bulleted list of 'areasForNextFocus', suggesting what the user should work on next based on the comparison.
+4.  Return the entire comparison in the specified JSON format. The 'dimensionChanges' should reflect the 'oldScore' and 'newScore' from the provided JSONs for each dimension.`;
+
+export const generateComparisonReport = async (oldAnalysis: AnalysisResult, newAnalysis: AnalysisResult): Promise<ComparisonResult> => {
+    const ai = getAiClient();
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-pro',
+            contents: {
+                parts: [
+                    { text: comparisonPrompt },
+                    { text: "\n--- OLDER ANALYSIS (JSON) ---" },
+                    { text: JSON.stringify(oldAnalysis, null, 2) },
+                    { text: "\n--- NEWER ANALYSIS (JSON) ---" },
+                    { text: JSON.stringify(newAnalysis, null, 2) },
+                ]
+            },
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: comparisonSchema,
+            }
+        });
+        return JSON.parse(response.text.trim());
+    } catch (error) {
+        console.error("Error generating comparison with Gemini:", error);
+        throw new Error("Failed to compare analyses. Please try again.");
+    }
 };

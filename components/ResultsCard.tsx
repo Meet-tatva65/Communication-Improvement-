@@ -1,303 +1,248 @@
 import React from 'react';
-import { AnalysisResult, Mistake } from '../types';
-import { DownloadIcon } from './icons';
+import { AnalysisResult, ComparisonResult, ConversationTurn, Mistake } from '../types';
+import { RatingDisplay } from './RatingDisplay';
+import { DownloadIcon, RobotIcon, UserIcon } from './icons';
 
-interface HighlightedTextProps {
-  text: string;
-  mistakes?: Mistake[];
-}
-
-const HighlightedText: React.FC<HighlightedTextProps> = ({ text, mistakes }) => {
-  if (!mistakes || mistakes.length === 0) {
-    return <>{text}</>;
-  }
-
-  // Create a regex from all incorrect phrases, escaping special characters
-  const regex = new RegExp(
-    '(' + mistakes.map(m => m.incorrectPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')',
-    'gi' // Use 'gi' for case-insensitive matching
-  );
-
-  const parts = text.split(regex).filter(part => part);
-
-  return (
-    <>
-      {parts.map((part, index) => {
-        const mistake = mistakes.find(m => m.incorrectPhrase.toLowerCase() === part.toLowerCase());
-        if (mistake) {
-          return (
-            <span
-              key={index}
-              className="bg-red-500/30 px-1 rounded-sm relative group cursor-pointer"
-            >
-              {part}
-              <span className="absolute bottom-full mb-2 w-72 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-sm rounded-lg p-3 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 border border-gray-700">
-                <strong className="text-red-400 block">Correction:</strong>
-                <span className="text-green-400 block mb-1">"{mistake.correction}"</span>
-                <strong className="text-red-400 block mt-2">Explanation:</strong>
-                {mistake.explanation}
-              </span>
-            </span>
-          );
-        }
-        return <React.Fragment key={index}>{part}</React.Fragment>;
-      })}
-    </>
-  );
-};
-
-export const ResultsCard: React.FC<{ result: AnalysisResult }> = ({ result }) => {
-  
-  const generateReportHtml = (analysisResult: AnalysisResult): string => {
-    const { overallScore, dimensionAnalysis, feedback } = analysisResult;
-
-    const dimensionsHtml = dimensionAnalysis
-      .map(
-        (dim) => `
-      <tr>
-        <td style="padding: 12px 15px; border-bottom: 1px solid #4A5568;">${dim.name}</td>
-        <td style="padding: 12px 15px; border-bottom: 1px solid #4A5568; text-align: right; font-weight: bold;">${dim.score.toFixed(1)} / 5</td>
-      </tr>
-    `
-      )
-      .join('');
-
-    const feedbackHtml = feedback
-      .map(
-        (item) => `
-      <li style="margin-bottom: 10px; line-height: 1.6;">${item}</li>
-    `
-      )
-      .join('');
-
-    return `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>RateMySpeak Analysis Report</title>
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: #1A202C;
-            color: #E2E8F0;
-            margin: 0;
-            padding: 40px;
-          }
-          .container {
-            max-width: 800px;
-            margin: auto;
-            background-color: #2D3748;
-            border-radius: 12px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            overflow: hidden;
-          }
-          header {
-            background-color: #4A5568;
-            padding: 30px;
-            text-align: center;
-          }
-          h1 {
-            margin: 0;
-            font-size: 2.5rem;
-            color: #FFFFFF;
-          }
-          h1 span {
-            color: #7F9CF5;
-          }
-          .content {
-            padding: 30px;
-          }
-          .section {
-            margin-bottom: 40px;
-          }
-          h2 {
-            font-size: 1.8rem;
-            color: #A0AEC0;
-            border-bottom: 2px solid #4A5568;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-          }
-          .overall-score-card {
-            background-color: #1A202C;
-            border-radius: 8px;
-            padding: 30px;
-            text-align: center;
-          }
-          .overall-score-card p {
-            margin: 0;
-            font-size: 1.1rem;
-            color: #A0AEC0;
-          }
-          .overall-score-card .score {
-            font-size: 5rem;
-            font-weight: bold;
-            color: #FFFFFF;
-            margin: 10px 0;
-          }
-          .overall-score-card .score span {
-            font-size: 2rem;
-            color: #718096;
-          }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-          }
-          th {
-            text-align: left;
-            padding: 12px 15px;
-            background-color: #4A5568;
-            color: #E2E8F0;
-          }
-          ul {
-            list-style-type: disc;
-            padding-left: 20px;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <header>
-            <h1>Rate<span>My</span>Speak</h1>
-          </header>
-          <div class="content">
-            <div class="section">
-              <h2>Overall Score</h2>
-              <div class="overall-score-card">
-                <p>Context-weighted score</p>
-                <div class="score">${overallScore.toFixed(2)}<span>/5</span></div>
-              </div>
-            </div>
-            
-            <div class="section">
-              <h2>Dimension Analysis</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th style="border-top-left-radius: 8px; border-bottom-left-radius: 8px;">Dimension</th>
-                    <th style="text-align: right; border-top-right-radius: 8px; border-bottom-right-radius: 8px;">Score</th>
-                  </tr>
-                </thead>
+// Helper to generate the HTML report for export
+const generateHtmlReport = (result: AnalysisResult): string => {
+  const { overallScore, dimensions, feedback } = result;
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>RateMySpeak Analysis Report</title>
+      <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="bg-gray-900 text-white font-sans p-8">
+      <div class="max-w-4xl mx-auto">
+        <header class="text-center mb-10">
+          <h1 class="text-4xl font-bold text-indigo-400">RateMySpeak</h1>
+          <p class="text-xl text-gray-400">Analysis Report</p>
+        </header>
+        <main>
+          <div class="bg-gray-800 rounded-lg p-8 mb-8 text-center">
+            <h2 class="text-lg font-semibold text-gray-400 mb-2">Overall Score</h2>
+            <p class="text-7xl font-bold text-white">${overallScore.toFixed(2)}<span class="text-3xl text-gray-500">/5</span></p>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-gray-800 rounded-lg p-6">
+              <h3 class="text-xl font-bold text-indigo-400 mb-4">Dimension Analysis</h3>
+              <table class="w-full text-left">
                 <tbody>
-                  ${dimensionsHtml}
+                  ${dimensions.map(d => `
+                    <tr class="border-b border-gray-700">
+                      <td class="py-2 text-gray-300">${d.name}</td>
+                      <td class="py-2 text-right font-semibold text-white">${d.score.toFixed(1)}/5</td>
+                    </tr>
+                  `).join('')}
                 </tbody>
               </table>
             </div>
-            
-            <div class="section">
-              <h2>Areas for Improvement</h2>
-              <ul>
-                ${feedbackHtml}
+            <div class="bg-gray-800 rounded-lg p-6">
+              <h3 class="text-xl font-bold text-indigo-400 mb-4">Areas for Improvement</h3>
+              <ul class="list-disc list-inside space-y-2 text-gray-300">
+                ${feedback.map(f => `<li>${f}</li>`).join('')}
               </ul>
             </div>
           </div>
-        </div>
-      </body>
-      </html>
-    `;
-  };
+        </main>
+      </div>
+    </body>
+    </html>
+  `;
+};
 
 
+const MistakeHighlighter: React.FC<{ turn: ConversationTurn }> = ({ turn }) => {
+    if (!turn.mistake) return <span>{turn.text}</span>;
+
+    const { text, mistake } = turn;
+    const { incorrectPhrase, suggestion, explanation } = mistake;
+    const parts = text.split(incorrectPhrase);
+    
+    return (
+        <span>
+            {parts[0]}
+            <span className="relative group bg-red-900/50 text-red-300 rounded px-1 py-0.5 cursor-pointer">
+                {incorrectPhrase}
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-72 mb-2 p-3 bg-gray-900 border border-gray-700 rounded-lg text-sm text-left opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                    <p className="font-bold text-white">Suggestion:</p>
+                    <p className="text-green-400 mb-2">"{suggestion}"</p>
+                    <p className="font-bold text-white">Explanation:</p>
+                    <p className="text-gray-400">{explanation}</p>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-x-8 border-x-transparent border-t-8 border-t-gray-700"></div>
+                </div>
+            </span>
+            {parts[1]}
+        </span>
+    );
+};
+
+
+export const ResultsCard: React.FC<{ result: AnalysisResult, title?: string }> = ({ result, title = "Analysis Report" }) => {
   const handleExport = () => {
-    const htmlContent = generateReportHtml(result);
-    const dataBlob = new Blob([htmlContent], { type: "text/html" });
-    const url = window.URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'RateMySpeak_Report.html';
-    document.body.appendChild(link); // Required for Firefox
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+    const htmlContent = generateHtmlReport(result);
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'RateMySpeak-Report.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="w-full max-w-6xl flex flex-col gap-8 animate-fade-in">
-      {/* Header with Export Button */}
-      <div className="flex justify-between items-center pb-4 border-b border-gray-700">
-        <h2 className="text-3xl font-bold text-gray-100">Analysis Report</h2>
-        <button
-          onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg shadow-md hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-75 transition-colors"
-        >
+    <div className="w-full max-w-7xl mx-auto space-y-6 sm:space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 className="text-2xl sm:text-3xl font-bold text-indigo-400">{title}</h2>
+        <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors text-sm sm:text-base self-start sm:self-center">
           <DownloadIcon className="w-5 h-5" />
           Export Report
         </button>
       </div>
 
-      {/* Top Section: Dashboard */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* Left Column */}
-        <div className="flex flex-col gap-8">
-          <div className="bg-gray-800 p-8 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
-            <h3 className="text-lg font-medium text-gray-300">Overall Score</h3>
-            <p className="text-7xl font-bold text-white my-2">
-              {result.overallScore.toFixed(2)}
-              <span className="text-3xl text-gray-400">/5</span>
-            </p>
-            <p className="text-sm text-gray-500">Context-weighted score (avg. of 3 runs)</p>
-          </div>
-
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-            <h3 className="text-xl font-semibold text-gray-200 mb-4">Dimension Analysis</h3>
-            <div className="space-y-3">
-                {result.dimensionAnalysis.map((dimension) => (
-                    <div key={dimension.name} className="flex justify-between items-baseline">
-                        <p className="text-gray-300">{dimension.name}</p>
-                        <p className="font-bold text-lg text-white">
-                            {dimension.score.toFixed(1)}<span className="text-sm text-gray-400">/5</span>
-                        </p>
+      {/* Dashboard */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Dimensions */}
+            <div className="bg-gray-800 p-4 sm:p-6 rounded-lg">
+                <h3 className="text-xl font-bold text-indigo-400 mb-4">Dimension Analysis</h3>
+                <div className="space-y-3">
+                    {result.dimensions.map(dim => (
+                        <div key={dim.name} className="flex justify-between items-center gap-2">
+                            <span className="text-gray-300 text-sm sm:text-base">{dim.name}</span>
+                            <div className='flex items-center gap-2 sm:gap-3'>
+                                <span className="font-semibold text-base sm:text-lg">{dim.score.toFixed(1)}</span>
+                                <RatingDisplay score={dim.score} />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+            {/* Feedback & Fillers */}
+            <div className="bg-gray-800 p-4 sm:p-6 rounded-lg space-y-6">
+                <div>
+                    <h3 className="text-xl font-bold text-indigo-400 mb-4">Areas for Improvement</h3>
+                    <ul className="list-disc list-inside space-y-2 text-gray-300 text-sm sm:text-base">
+                        {result.feedback.map((item, i) => <li key={i}>{item}</li>)}
+                    </ul>
+                </div>
+                 <div>
+                    <h3 className="text-lg font-semibold text-indigo-400 mb-2">Filler Word Usage</h3>
+                    <div className="flex flex-wrap gap-2">
+                        {result.fillerWords.length > 0 ? result.fillerWords.map(fw => (
+                            <span key={fw.word} className="bg-gray-700 text-gray-300 px-2 py-1 rounded-full text-xs sm:text-sm">
+                                {fw.word}: <span className="font-bold text-white">{fw.count}</span>
+                            </span>
+                        )) : <p className="text-gray-400 text-sm sm:text-base">No significant filler words detected.</p>}
                     </div>
-                ))}
+                </div>
             </div>
-          </div>
         </div>
-
-        {/* Right Column */}
-        <div className="flex flex-col gap-8">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg flex-grow">
-            <h3 className="text-xl font-semibold text-gray-200 mb-4">Actionable Feedback</h3>
-            <ul className="list-disc list-inside space-y-3 text-gray-300 text-base">
-              {result.feedback.map((item, index) => (
-                <li key={index}>{item}</li>
-              ))}
-            </ul>
-          </div>
-
-          {result.fillerWords.length > 0 && (
-            <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
-              <h3 className="text-xl font-semibold text-gray-200 mb-4">Filler Word Usage</h3>
-              <div className="flex flex-wrap gap-x-4 gap-y-2">
-                {result.fillerWords.map((fw) => (
-                  <div key={fw.word} className="bg-gray-700/50 py-1 px-3 rounded-full text-sm">
-                    <span className="font-semibold text-indigo-300">{fw.word}</span>
-                    <span className="text-gray-400 ml-2">{fw.count} times</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        {/* Overall Score */}
+        <div className="bg-gray-800 p-6 rounded-lg flex flex-col items-center justify-center text-center">
+            <h3 className="text-xl sm:text-2xl font-bold text-indigo-400 mb-2">Overall Score</h3>
+            <p className="text-6xl sm:text-8xl font-bold text-white">{result.overallScore.toFixed(2)}<span className="text-3xl sm:text-4xl text-gray-500">/5</span></p>
+            <p className="text-gray-400 mt-2 text-sm sm:text-base">Context-weighted score</p>
         </div>
       </div>
 
-      {/* Bottom Section: Conversation Transcript */}
-      <div className="bg-gray-800 p-6 md:p-8 rounded-xl shadow-lg flex flex-col w-full">
-        <h3 className="text-xl font-semibold text-gray-200 mb-4">Conversation Transcript</h3>
-        <div className="mt-2 space-y-4 max-h-[600px] overflow-y-auto pr-4 -mr-4">
-          {result.conversation.map((turn, index) => (
-            <div key={index} className={`flex flex-col ${turn.speaker === 'User' ? 'items-end' : 'items-start'}`}>
-              <div className={`rounded-lg px-4 py-2 max-w-[90%] shadow ${turn.speaker === 'User' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-200'}`}>
-                <p className="text-xs font-bold mb-1 opacity-80">{turn.speaker}</p>
-                <p className="text-base leading-relaxed">
-                  {turn.speaker === 'User' ? <HighlightedText text={turn.text} mistakes={turn.mistakes} /> : turn.text}
-                </p>
-              </div>
-            </div>
-          ))}
+      {/* Transcript */}
+      <div className="bg-gray-800 p-4 sm:p-6 rounded-lg">
+        <h3 className="text-xl font-bold text-indigo-400 mb-4">Conversation Transcript</h3>
+        <div className="max-h-[500px] overflow-y-auto pr-2 sm:pr-4 space-y-6">
+            {result.conversation.map((turn, i) => (
+                <div key={i} className={`flex items-end gap-2 sm:gap-3 ${turn.speaker === 'User' ? 'justify-end' : ''}`}>
+                    {turn.speaker === 'AI' && <RobotIcon className="w-8 h-8 flex-shrink-0 bg-gray-700 text-indigo-400 p-1.5 rounded-full"/>}
+                    <div className={`w-fit max-w-[85%] sm:max-w-xl rounded-2xl px-3 sm:px-4 py-2 sm:py-3 ${turn.speaker === 'User' ? 'bg-indigo-600 rounded-br-none' : 'bg-gray-700 rounded-bl-none'}`}>
+                        <p className="text-white leading-relaxed text-sm sm:text-base"><MistakeHighlighter turn={turn} /></p>
+                    </div>
+                     {turn.speaker === 'User' && <UserIcon className="w-8 h-8 flex-shrink-0 bg-gray-700 text-gray-300 p-1.5 rounded-full"/>}
+                </div>
+            ))}
         </div>
       </div>
     </div>
   );
+};
+
+interface ComparisonResultsCardProps {
+    oldResult: AnalysisResult;
+    newResult: AnalysisResult;
+    comparison: ComparisonResult;
+    onReset: () => void;
+}
+
+export const ComparisonResultsCard: React.FC<ComparisonResultsCardProps> = ({ oldResult, newResult, comparison, onReset }) => {
+    const getScoreChangeClass = (oldScore: number, newScore: number) => {
+        if (newScore > oldScore) return 'text-green-400';
+        if (newScore < oldScore) return 'text-red-400';
+        return 'text-gray-400';
+    };
+
+    return (
+        <div className="w-full max-w-7xl mx-auto space-y-8 text-white">
+             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <h2 className="text-2xl sm:text-3xl font-bold text-indigo-400">Improvement Report</h2>
+                <button onClick={onReset} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors text-sm sm:text-base self-start sm:self-center">
+                    Analyze Again
+                </button>
+            </div>
+            
+            <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
+                <h3 className="text-xl font-bold text-indigo-400 mb-4">Dimension Progress</h3>
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[500px] text-left text-sm sm:text-base">
+                        <thead>
+                            <tr className="border-b border-gray-600">
+                                <th className="p-2">Dimension</th>
+                                <th className="p-2 text-center">Old Score</th>
+                                <th className="p-2 text-center">New Score</th>
+                                <th className="p-2 text-center">Change</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {comparison.dimensionChanges.map(change => (
+                                <tr key={change.name} className="border-b border-gray-700">
+                                    <td className="p-2 font-semibold">{change.name}</td>
+                                    <td className="p-2 text-center text-gray-400">{change.oldScore.toFixed(1)}</td>
+                                    <td className="p-2 text-center font-bold">{change.newScore.toFixed(1)}</td>
+                                    <td className={`p-2 text-center font-bold ${getScoreChangeClass(change.oldScore, change.newScore)}`}>
+                                        {(change.newScore - change.oldScore).toFixed(1)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
+                    <h3 className="text-xl font-bold text-indigo-400 mb-4">Improvement Summary</h3>
+                    <ul className="list-disc list-inside space-y-2 text-gray-300 text-sm sm:text-base">
+                        {comparison.improvementSummary.map((item, i) => <li key={i}>{item}</li>)}
+                    </ul>
+                </div>
+                <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
+                    <h3 className="text-xl font-bold text-indigo-400 mb-4">Areas for Next Focus</h3>
+                    <ul className="list-disc list-inside space-y-2 text-gray-300 text-sm sm:text-base">
+                        {comparison.areasForNextFocus.map((item, i) => <li key={i}>{item}</li>)}
+                    </ul>
+                </div>
+            </div>
+
+            <div className="mt-12 pt-8 border-t border-gray-700">
+                <h2 className="text-2xl sm:text-3xl font-bold text-center text-indigo-400 mb-8">Detailed Analysis Breakdown</h2>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                    <ResultsCard result={oldResult} title="Older Recording" />
+                    <ResultsCard result={newResult} title="Newer Recording" />
+                </div>
+            </div>
+        </div>
+    );
 };

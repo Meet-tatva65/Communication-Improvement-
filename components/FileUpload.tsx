@@ -1,5 +1,4 @@
-
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { UploadCloudIcon } from './icons';
 
 interface FileUploadProps {
@@ -9,6 +8,7 @@ interface FileUploadProps {
 
 export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const uniqueId = useRef(`audio-upload-${Math.random().toString(36).substring(2, 9)}`).current;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -45,9 +45,9 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled }
   }, [disabled, onFileSelect]);
 
   return (
-    <div className="w-full max-w-lg">
+    <div className="w-full max-w-md">
       <label
-        htmlFor="audio-upload"
+        htmlFor={uniqueId}
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
@@ -63,7 +63,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFileSelect, disabled }
           <span className="text-sm text-gray-500">Supports MP3, WAV, M4A, etc.</span>
         </span>
         <input
-          id="audio-upload"
+          id={uniqueId}
           type="file"
           accept="audio/*"
           className="hidden"

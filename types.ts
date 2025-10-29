@@ -1,29 +1,42 @@
-export interface Dimension {
-  name: string;
-  score: number;
-}
-
 export interface Mistake {
-    incorrectPhrase: string;
-    correction: string;
-    explanation: string;
+  incorrectPhrase: string;
+  suggestion: string;
+  explanation: string;
 }
 
 export interface ConversationTurn {
   speaker: 'User' | 'AI';
   text: string;
-  mistakes?: Mistake[];
+  mistake?: Mistake;
 }
 
-export interface FillerWordUsage {
+export interface Dimension {
+  name: string;
+  score: number;
+}
+
+export interface FillerWord {
   word: string;
   count: number;
 }
 
 export interface AnalysisResult {
   overallScore: number;
-  dimensionAnalysis: Dimension[];
+  dimensions: Dimension[];
   feedback: string[];
-  fillerWords: FillerWordUsage[];
+  fillerWords: FillerWord[];
   conversation: ConversationTurn[];
+}
+
+// Types for improvement tracking
+export interface DimensionChange {
+  name: string;
+  oldScore: number;
+  newScore: number;
+}
+
+export interface ComparisonResult {
+  dimensionChanges: DimensionChange[];
+  improvementSummary: string[];
+  areasForNextFocus: string[];
 }
