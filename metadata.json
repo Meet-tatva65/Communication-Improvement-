@@ -1,0 +1,5 @@
+{
+  "name": "Communication skill practice",
+  "description": "Upload a two-person conversation audio file (AI and User) to receive a detailed analysis of the user's communication skills, including a full transcript and ratings on clarity, conciseness, engagement, and language control.",
+  "requestFramePermissions": []
+}
