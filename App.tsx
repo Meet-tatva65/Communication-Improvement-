@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { ResultsCard } from './components/ResultsCard';
@@ -32,7 +31,7 @@ export default function App() {
       setResult(analysisResult);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
-      setError(`Analysis failed: ${errorMessage}`);
+      setError(`Analysis failed. ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -51,7 +50,7 @@ export default function App() {
         <div className="text-center">
             <div className="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-indigo-400 mx-auto"></div>
             <h2 className="text-2xl font-semibold mt-4">Analyzing Audio...</h2>
-            <p className="text-gray-400 mt-2">This may take a few moments. Please wait.</p>
+            <p className="text-gray-400 mt-2">This may take a few moments. We're running a deep analysis.</p>
         </div>
       );
     }
@@ -60,7 +59,7 @@ export default function App() {
         return (
             <div className="text-center bg-red-900/20 border border-red-500 p-6 rounded-lg">
                 <h2 className="text-2xl font-semibold text-red-400">An Error Occurred</h2>
-                <p className="text-gray-300 mt-2">{error}</p>
+                <p className="text-gray-300 mt-2 max-w-xl mx-auto">{error}</p>
                 <button
                   onClick={handleReset}
                   className="mt-6 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-75"
@@ -73,7 +72,7 @@ export default function App() {
 
     if (result) {
         return (
-            <>
+            <div className="w-full flex flex-col items-center">
               <ResultsCard result={result} />
               <button
                 onClick={handleReset}
@@ -81,7 +80,7 @@ export default function App() {
               >
                 Analyze Another File
               </button>
-            </>
+            </div>
         )
     }
 
@@ -105,7 +104,7 @@ export default function App() {
   };
   
   return (
-    <main className="min-h-screen w-full flex flex-col items-center justify-center p-4 bg-gray-900 text-white">
+    <main className="min-h-screen w-full flex flex-col items-center justify-center p-4 sm:p-6 md:p-8 bg-gray-900 text-white">
       <div className="text-center mb-10">
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">
           Audio <span className="text-indigo-400">Performance Analyzer</span>
@@ -115,7 +114,7 @@ export default function App() {
         </p>
       </div>
 
-      <div className="w-full max-w-4xl flex flex-col items-center justify-center">
+      <div className="w-full max-w-6xl flex flex-col items-center justify-center">
         {renderContent()}
       </div>
       

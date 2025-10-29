@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from '@google/genai';
-import { AnalysisResult } from '../types';
+import { AnalysisResult, Dimension } from '../types';
 
 const fileToGenerativePart = async (file: File) => {
   const base64EncodedDataPromise = new Promise<string>((resolve) => {
@@ -83,64 +83,91 @@ const analysisSchema = {
     required: ['overallScore', 'dimensionAnalysis', 'feedback', 'fillerWords', 'conversation']
 };
 
+const prompt = `
+You are an expert communication coach with a PhD in linguistics. Analyze the provided audio file of a conversation between a 'User' and an 'AI', focusing exclusively on the User's speech.
 
-export const analyzeAudio = async (audioFile: File): Promise<AnalysisResult> => {
-  if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable not set");
-  }
+Your analysis must be a deep, multi-faceted evaluation of their communication skills. Your entire output must be a single JSON object conforming to the provided schema.
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+1.  **Overall Score**: Provide a single, context-weighted overall score from 0.0 to 5.0.
 
-  const audioPart = await fileToGenerativePart(audioFile);
-  
-  const prompt = `
-    You are an expert communication coach with a PhD in linguistics. Analyze the provided audio file of a conversation between a 'User' and an 'AI', focusing exclusively on the User's speech.
+2.  **Dimension Analysis**: Evaluate the user across the following 6 dimensions. For each, provide an overall score from 0.0 to 5.0.
+    *   Clarity in speaking
+    *   Grasping and then answering
+    *   Understanding
+    *   Language Proficiency
+    *   Conciseness
+    *   Speaking up to the topic
 
-    Your analysis must be a deep, multi-faceted evaluation of their communication skills. Your entire output must be a single JSON object conforming to the provided schema.
+3.  **Conversation Transcript**: Provide a full, turn-by-turn transcript of the entire conversation. For each turn, specify the speaker ('User' or 'AI') and the text.
+    *   **Mistake Highlighting**: For the User's turns ONLY, identify any grammatical errors, awkward phrasing, or idiomatic mistakes. For each mistake, specify the exact \`incorrectPhrase\`, a suggested \`correction\`, and a brief \`explanation\`. If there are no mistakes in a turn, the \`mistakes\` array should be empty or omitted.
 
-    1.  **Overall Score**: Provide a single, context-weighted overall score from 0.0 to 5.0.
+4.  **Actionable Feedback**: Provide a list of 5-10 specific, bullet-point style feedback items for improvement based on your analysis.
 
-    2.  **Dimension Analysis**: Evaluate the user across the following 6 dimensions. For each, provide an overall score from 0.0 to 5.0.
-        *   Clarity in speaking
-        *   Grasping and then answering
-        *   Understanding
-        *   Language Proficiency
-        *   Conciseness
-        *   Speaking up to the topic
+5.  **Filler Words**: Identify the top 3-5 most frequently used filler words (e.g., 'um', 'uh', 'like') and provide a count for each. If none are used, return an empty array.
 
-    3.  **Conversation Transcript**: Provide a full, turn-by-turn transcript of the entire conversation. For each turn, specify the speaker ('User' or 'AI') and the text.
-        *   **Mistake Highlighting**: For the User's turns ONLY, identify any grammatical errors, awkward phrasing, or idiomatic mistakes. For each mistake, specify the exact \`incorrectPhrase\`, a suggested \`correction\`, and a brief \`explanation\`. If there are no mistakes in a turn, the \`mistakes\` array should be empty or omitted.
+Analyze the audio and return only the structured JSON.
+`;
 
-    4.  **Actionable Feedback**: Provide a list of 5-10 specific, bullet-point style feedback items for improvement based on your analysis.
-
-    5.  **Filler Words**: Identify the top 3-5 most frequently used filler words (e.g., 'um', 'uh', 'like') and provide a count for each. If none are used, return an empty array.
-
-    Analyze the audio and return only the structured JSON.
-  `;
-
-  try {
+const performSingleAnalysis = async (ai: GoogleGenAI, audioPart: any): Promise<AnalysisResult> => {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: { parts: [audioPart, { text: prompt }] },
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: analysisSchema,
-      },
+        model: 'gemini-2.5-pro',
+        contents: { parts: [audioPart, { text: prompt }] },
+        config: {
+            responseMimeType: 'application/json',
+            responseSchema: analysisSchema,
+        },
     });
 
     const jsonText = response.text.trim();
     const result = JSON.parse(jsonText);
     
     if (!result.overallScore || !result.dimensionAnalysis || !result.feedback || !result.fillerWords || !result.conversation) {
-      throw new Error("Invalid response structure from API. Missing required fields.");
+        throw new Error("Invalid response structure from API. Missing required fields.");
+    }
+    return result as AnalysisResult;
+};
+
+export const analyzeAudio = async (audioFile: File): Promise<AnalysisResult> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const audioPart = await fileToGenerativePart(audioFile);
+  const analysisRuns = 3;
+
+  try {
+    const analysisPromises: Promise<AnalysisResult>[] = [];
+    for (let i = 0; i < analysisRuns; i++) {
+        analysisPromises.push(performSingleAnalysis(ai, audioPart));
     }
 
-    return result as AnalysisResult;
+    const results = await Promise.all(analysisPromises);
+    
+    // Use the first result for qualitative data (feedback, transcript, etc.)
+    const finalResult = { ...results[0] };
+
+    // Average the scores
+    const totalOverallScore = results.reduce((sum, result) => sum + result.overallScore, 0);
+    finalResult.overallScore = totalOverallScore / analysisRuns;
+
+    const averagedDimensions: Dimension[] = [];
+    if (finalResult.dimensionAnalysis) {
+        finalResult.dimensionAnalysis.forEach(dimension => {
+            const totalDimScore = results.reduce((sum, result) => {
+                const correspondingDim = result.dimensionAnalysis.find(d => d.name === dimension.name);
+                return sum + (correspondingDim ? correspondingDim.score : 0);
+            }, 0);
+            averagedDimensions.push({
+                name: dimension.name,
+                score: totalDimScore / analysisRuns
+            });
+        });
+        finalResult.dimensionAnalysis = averagedDimensions;
+    }
+
+    return finalResult;
 
   } catch (error) {
     console.error("Error analyzing audio with Gemini API:", error);
     if (error instanceof Error) {
-        throw new Error(`Failed to analyze audio: ${error.message}`);
+        throw new Error(`Failed to analyze audio: ${error.message}. This could be due to an invalid API key or an issue with the audio file.`);
     }
     throw new Error("An unknown error occurred during audio analysis.");
   }

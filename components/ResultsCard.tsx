@@ -14,7 +14,7 @@ const HighlightedText: React.FC<HighlightedTextProps> = ({ text, mistakes }) => 
   // Create a regex from all incorrect phrases, escaping special characters
   const regex = new RegExp(
     '(' + mistakes.map(m => m.incorrectPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')',
-    'g'
+    'gi' // Use 'gi' for case-insensitive matching
   );
 
   const parts = text.split(regex).filter(part => part);
@@ -22,7 +22,7 @@ const HighlightedText: React.FC<HighlightedTextProps> = ({ text, mistakes }) => 
   return (
     <>
       {parts.map((part, index) => {
-        const mistake = mistakes.find(m => m.incorrectPhrase === part);
+        const mistake = mistakes.find(m => m.incorrectPhrase.toLowerCase() === part.toLowerCase());
         if (mistake) {
           return (
             <span
@@ -45,21 +45,21 @@ const HighlightedText: React.FC<HighlightedTextProps> = ({ text, mistakes }) => 
   );
 };
 
-
 export const ResultsCard: React.FC<{ result: AnalysisResult }> = ({ result }) => {
   return (
-    <div className="w-full max-w-6xl bg-gray-900/50 p-6 md:p-8 rounded-xl shadow-2xl animate-fade-in">
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+    <div className="w-full max-w-6xl flex flex-col gap-8 animate-fade-in">
+      {/* Top Section: Dashboard */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         
         {/* Left Column */}
-        <div className="lg:col-span-2 flex flex-col gap-8">
+        <div className="flex flex-col gap-8">
           <div className="bg-gray-800 p-8 rounded-xl flex flex-col items-center justify-center text-center shadow-lg">
             <h3 className="text-lg font-medium text-gray-300">Overall Score</h3>
             <p className="text-7xl font-bold text-white my-2">
               {result.overallScore.toFixed(2)}
               <span className="text-3xl text-gray-400">/5</span>
             </p>
-            <p className="text-sm text-gray-500">Context-weighted score</p>
+            <p className="text-sm text-gray-500">Context-weighted score (avg. of 3 runs)</p>
           </div>
 
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg">
@@ -78,23 +78,7 @@ export const ResultsCard: React.FC<{ result: AnalysisResult }> = ({ result }) =>
         </div>
 
         {/* Right Column */}
-        <div className="lg:col-span-3 flex flex-col gap-8">
-          <div className="bg-gray-800 p-6 rounded-xl shadow-lg flex flex-col">
-            <h3 className="text-xl font-semibold text-gray-200 mb-4">Conversation Transcript</h3>
-            <div className="mt-2 space-y-4 max-h-[400px] overflow-y-auto pr-3 -mr-3">
-              {result.conversation.map((turn, index) => (
-                <div key={index} className={`flex flex-col ${turn.speaker === 'User' ? 'items-end' : 'items-start'}`}>
-                  <div className={`rounded-lg px-4 py-2 max-w-[90%] shadow ${turn.speaker === 'User' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-200'}`}>
-                    <p className="text-xs font-bold mb-1 opacity-80">{turn.speaker}</p>
-                    <p className="text-base leading-relaxed">
-                      {turn.speaker === 'User' ? <HighlightedText text={turn.text} mistakes={turn.mistakes} /> : turn.text}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
+        <div className="flex flex-col gap-8">
           <div className="bg-gray-800 p-6 rounded-xl shadow-lg flex-grow">
             <h3 className="text-xl font-semibold text-gray-200 mb-4">Actionable Feedback</h3>
             <ul className="list-disc list-inside space-y-3 text-gray-300 text-base">
@@ -117,6 +101,23 @@ export const ResultsCard: React.FC<{ result: AnalysisResult }> = ({ result }) =>
               </div>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Bottom Section: Conversation Transcript */}
+      <div className="bg-gray-800 p-6 md:p-8 rounded-xl shadow-lg flex flex-col w-full">
+        <h3 className="text-xl font-semibold text-gray-200 mb-4">Conversation Transcript</h3>
+        <div className="mt-2 space-y-4 max-h-[600px] overflow-y-auto pr-4 -mr-4">
+          {result.conversation.map((turn, index) => (
+            <div key={index} className={`flex flex-col ${turn.speaker === 'User' ? 'items-end' : 'items-start'}`}>
+              <div className={`rounded-lg px-4 py-2 max-w-[90%] shadow ${turn.speaker === 'User' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-200'}`}>
+                <p className="text-xs font-bold mb-1 opacity-80">{turn.speaker}</p>
+                <p className="text-base leading-relaxed">
+                  {turn.speaker === 'User' ? <HighlightedText text={turn.text} mistakes={turn.mistakes} /> : turn.text}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
