@@ -128,6 +128,10 @@ const performSingleAnalysis = async (ai: GoogleGenAI, audioPart: any): Promise<A
 };
 
 export const analyzeAudio = async (audioFile: File): Promise<AnalysisResult> => {
+  if (!process.env.API_KEY) {
+    throw new Error("Configuration Error: The API_KEY environment variable is not set. Please add it to your Vercel project's Environment Variables settings and redeploy.");
+  }
+
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const audioPart = await fileToGenerativePart(audioFile);
   const analysisRuns = 3;
@@ -167,7 +171,7 @@ export const analyzeAudio = async (audioFile: File): Promise<AnalysisResult> => 
   } catch (error) {
     console.error("Error analyzing audio with Gemini API:", error);
     if (error instanceof Error) {
-        throw new Error(`Failed to analyze audio: ${error.message}. This could be due to an invalid API key or an issue with the audio file.`);
+        throw error;
     }
     throw new Error("An unknown error occurred during audio analysis.");
   }

@@ -31,7 +31,7 @@ export default function App() {
       setResult(analysisResult);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
-      setError(`Analysis failed. ${errorMessage}`);
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -57,9 +57,9 @@ export default function App() {
 
     if (error) {
         return (
-            <div className="text-center bg-red-900/20 border border-red-500 p-6 rounded-lg">
+            <div className="text-center bg-red-900/20 border border-red-500 p-6 rounded-lg max-w-2xl">
                 <h2 className="text-2xl font-semibold text-red-400">An Error Occurred</h2>
-                <p className="text-gray-300 mt-2 max-w-xl mx-auto">{error}</p>
+                <p className="text-gray-300 mt-2 mx-auto">{error}</p>
                 <button
                   onClick={handleReset}
                   className="mt-6 px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-opacity-75"
