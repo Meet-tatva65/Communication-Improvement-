@@ -1,11 +1,10 @@
 import React from 'react';
-import { AnalysisResult, ComparisonResult, ConversationTurn, Mistake } from '../types';
-import { RatingDisplay } from './RatingDisplay';
+import { AnalysisResult, ComparisonResult, ConversationTurn } from '../types';
 import { DownloadIcon, RobotIcon, UserIcon } from './icons';
 
 // Helper to generate the HTML report for export
 const generateHtmlReport = (result: AnalysisResult): string => {
-  const { overallScore, dimensions, feedback } = result;
+  const { overallScore, dimensions, feedback, fluencySpeechRatePercentage } = result;
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -22,10 +21,16 @@ const generateHtmlReport = (result: AnalysisResult): string => {
           <p class="text-xl text-gray-400">Analysis Report</p>
         </header>
         <main>
-          <div class="bg-gray-800 rounded-lg p-8 mb-8 text-center">
-            <h2 class="text-lg font-semibold text-gray-400 mb-2">Overall Score</h2>
-            <p class="text-7xl font-bold text-white">${overallScore.toFixed(2)}<span class="text-3xl text-gray-500">/5</span></p>
-          </div>
+           <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+              <div class="bg-gray-800 rounded-lg p-8 text-center">
+                <h2 class="text-lg font-semibold text-gray-400 mb-2">Overall Score</h2>
+                <p class="text-7xl font-bold text-white">${overallScore.toFixed(2)}<span class="text-3xl text-gray-500">/5</span></p>
+              </div>
+               <div class="bg-gray-800 rounded-lg p-8 text-center">
+                <h2 class="text-lg font-semibold text-gray-400 mb-2">Fluency / Speech Rate</h2>
+                <p class="text-7xl font-bold text-white">${fluencySpeechRatePercentage}<span class="text-3xl text-gray-500">%</span></p>
+              </div>
+           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div class="bg-gray-800 rounded-lg p-6">
               <h3 class="text-xl font-bold text-indigo-400 mb-4">Dimension Analysis</h3>
@@ -107,47 +112,50 @@ export const ResultsCard: React.FC<{ result: AnalysisResult, title?: string }> =
 
       {/* Dashboard */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Dimensions */}
-            <div className="bg-gray-800 p-4 sm:p-6 rounded-lg">
-                <h3 className="text-xl font-bold text-indigo-400 mb-4">Dimension Analysis</h3>
-                <div className="space-y-3">
-                    {result.dimensions.map(dim => (
-                        <div key={dim.name} className="flex justify-between items-center gap-2">
-                            <span className="text-gray-300 text-sm sm:text-base">{dim.name}</span>
-                            <div className='flex items-center gap-2 sm:gap-3'>
-                                <span className="font-semibold text-base sm:text-lg">{dim.score.toFixed(1)}</span>
-                                <RatingDisplay score={dim.score} />
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-            {/* Feedback & Fillers */}
-            <div className="bg-gray-800 p-4 sm:p-6 rounded-lg space-y-6">
-                <div>
-                    <h3 className="text-xl font-bold text-indigo-400 mb-4">Areas for Improvement</h3>
-                    <ul className="list-disc list-inside space-y-2 text-gray-300 text-sm sm:text-base">
-                        {result.feedback.map((item, i) => <li key={i}>{item}</li>)}
-                    </ul>
-                </div>
-                 <div>
-                    <h3 className="text-lg font-semibold text-indigo-400 mb-2">Filler Word Usage</h3>
-                    <div className="flex flex-wrap gap-2">
-                        {result.fillerWords.length > 0 ? result.fillerWords.map(fw => (
-                            <span key={fw.word} className="bg-gray-700 text-gray-300 px-2 py-1 rounded-full text-xs sm:text-sm">
-                                {fw.word}: <span className="font-bold text-white">{fw.count}</span>
-                            </span>
-                        )) : <p className="text-gray-400 text-sm sm:text-base">No significant filler words detected.</p>}
+        {/* Dimensions */}
+        <div className="bg-gray-800 p-4 sm:p-6 rounded-lg">
+            <h3 className="text-xl font-bold text-indigo-400 mb-4">Dimension Analysis</h3>
+            <div className="space-y-3">
+                {result.dimensions.map(dim => (
+                    <div key={dim.name} className="flex justify-between items-center gap-2">
+                        <span className="text-gray-300 text-sm sm:text-base">{dim.name}</span>
+                        <span className="font-semibold text-white text-base sm:text-lg">{dim.score.toFixed(1)}/5</span>
                     </div>
+                ))}
+            </div>
+        </div>
+        
+        {/* Feedback & Fillers */}
+        <div className="bg-gray-800 p-4 sm:p-6 rounded-lg space-y-6">
+            <div>
+                <h3 className="text-xl font-bold text-indigo-400 mb-4">Areas for Improvement</h3>
+                <ul className="list-disc list-inside space-y-2 text-gray-300 text-sm sm:text-base">
+                    {result.feedback.map((item, i) => <li key={i}>{item}</li>)}
+                </ul>
+            </div>
+             <div>
+                <h3 className="text-lg font-semibold text-indigo-400 mb-2">Filler Word Usage</h3>
+                <div className="flex flex-wrap gap-2">
+                    {result.fillerWords.length > 0 ? result.fillerWords.map(fw => (
+                        <span key={fw.word} className="bg-gray-700 text-gray-300 px-2 py-1 rounded-full text-xs sm:text-sm">
+                            {fw.word}: <span className="font-bold text-white">{fw.count}</span>
+                        </span>
+                    )) : <p className="text-gray-400 text-sm sm:text-base">No significant filler words detected.</p>}
                 </div>
             </div>
         </div>
-        {/* Overall Score */}
-        <div className="bg-gray-800 p-6 rounded-lg flex flex-col items-center justify-center text-center">
-            <h3 className="text-xl sm:text-2xl font-bold text-indigo-400 mb-2">Overall Score</h3>
-            <p className="text-6xl sm:text-8xl font-bold text-white">{result.overallScore.toFixed(2)}<span className="text-3xl sm:text-4xl text-gray-500">/5</span></p>
-            <p className="text-gray-400 mt-2 text-sm sm:text-base">Context-weighted score</p>
+
+        {/* Scores */}
+        <div className="space-y-6">
+            <div className="bg-gray-800 p-6 rounded-lg flex flex-col items-center justify-center text-center">
+                <h3 className="text-xl sm:text-2xl font-bold text-indigo-400 mb-2">Overall Score</h3>
+                <p className="text-6xl sm:text-8xl font-bold text-white">{result.overallScore.toFixed(2)}<span className="text-3xl sm:text-4xl text-gray-500">/5</span></p>
+                <p className="text-gray-400 mt-2 text-sm sm:text-base">Context-weighted score</p>
+            </div>
+            <div className="bg-gray-800 p-6 rounded-lg flex flex-col items-center justify-center text-center">
+                <h3 className="text-xl sm:text-2xl font-bold text-indigo-400 mb-2">Fluency / Speech Rate</h3>
+                <p className="text-6xl sm:text-8xl font-bold text-white">{result.fluencySpeechRatePercentage}<span className="text-3xl sm:text-4xl text-gray-500">%</span></p>
+            </div>
         </div>
       </div>
 
@@ -184,6 +192,9 @@ export const ComparisonResultsCard: React.FC<ComparisonResultsCardProps> = ({ ol
         return 'text-gray-400';
     };
 
+    const overallScoreChange = newResult.overallScore - oldResult.overallScore;
+    const fluencyChangeValue = comparison.fluencyChange.newPercentage - comparison.fluencyChange.oldPercentage;
+
     return (
         <div className="w-full max-w-7xl mx-auto space-y-8 text-white">
              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -193,6 +204,44 @@ export const ComparisonResultsCard: React.FC<ComparisonResultsCardProps> = ({ ol
                 </button>
             </div>
             
+            {/* Overall Progress Highlight */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-center">
+                <div className="bg-gray-800 p-6 rounded-lg">
+                    <h3 className="text-xl font-bold text-indigo-400 mb-2">Overall Score Progress</h3>
+                    <div className="flex items-baseline justify-center gap-4">
+                        <div className="flex flex-col items-center">
+                            <span className="text-xs text-gray-400">OLD</span>
+                            <p className="text-4xl font-bold text-gray-400">{oldResult.overallScore.toFixed(2)}</p>
+                        </div>
+                        <p className="text-2xl text-gray-500 mt-3">→</p>
+                        <div className="flex flex-col items-center">
+                            <span className="text-xs text-gray-400">NEW</span>
+                            <p className="text-6xl font-bold text-white">{newResult.overallScore.toFixed(2)}</p>
+                        </div>
+                    </div>
+                    <p className={`mt-2 text-2xl font-bold ${getScoreChangeClass(oldResult.overallScore, newResult.overallScore)}`}>
+                        {overallScoreChange >= 0 ? '+' : ''}{overallScoreChange.toFixed(2)}
+                    </p>
+                </div>
+                <div className="bg-gray-800 p-6 rounded-lg">
+                    <h3 className="text-xl font-bold text-indigo-400 mb-2">Fluency Progress</h3>
+                    <div className="flex items-baseline justify-center gap-4">
+                        <div className="flex flex-col items-center">
+                            <span className="text-xs text-gray-400">OLD</span>
+                            <p className="text-4xl font-bold text-gray-400">{comparison.fluencyChange.oldPercentage}%</p>
+                        </div>
+                        <p className="text-2xl text-gray-500 mt-3">→</p>
+                        <div className="flex flex-col items-center">
+                            <span className="text-xs text-gray-400">NEW</span>
+                            <p className="text-6xl font-bold text-white">{comparison.fluencyChange.newPercentage}%</p>
+                        </div>
+                    </div>
+                    <p className={`mt-2 text-2xl font-bold ${getScoreChangeClass(comparison.fluencyChange.oldPercentage, comparison.fluencyChange.newPercentage)}`}>
+                        {fluencyChangeValue >= 0 ? '+' : ''}{fluencyChangeValue.toFixed(0)}%
+                    </p>
+                </div>
+            </div>
+
             <div className="bg-gray-800 rounded-lg p-4 sm:p-6">
                 <h3 className="text-xl font-bold text-indigo-400 mb-4">Dimension Progress</h3>
                 <div className="overflow-x-auto">
@@ -216,6 +265,14 @@ export const ComparisonResultsCard: React.FC<ComparisonResultsCardProps> = ({ ol
                                     </td>
                                 </tr>
                             ))}
+                             <tr className="border-b border-gray-700">
+                                <td className="p-2 font-semibold">Fluency / Speech Rate</td>
+                                <td className="p-2 text-center text-gray-400">{comparison.fluencyChange.oldPercentage}%</td>
+                                <td className="p-2 text-center font-bold">{comparison.fluencyChange.newPercentage}%</td>
+                                <td className={`p-2 text-center font-bold ${getScoreChangeClass(comparison.fluencyChange.oldPercentage, comparison.fluencyChange.newPercentage)}`}>
+                                    {(comparison.fluencyChange.newPercentage - comparison.fluencyChange.oldPercentage).toFixed(0)}%
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -238,7 +295,7 @@ export const ComparisonResultsCard: React.FC<ComparisonResultsCardProps> = ({ ol
 
             <div className="mt-12 pt-8 border-t border-gray-700">
                 <h2 className="text-2xl sm:text-3xl font-bold text-center text-indigo-400 mb-8">Detailed Analysis Breakdown</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                <div className="grid grid-cols-1 gap-8 items-start">
                     <ResultsCard result={oldResult} title="Older Recording" />
                     <ResultsCard result={newResult} title="Newer Recording" />
                 </div>

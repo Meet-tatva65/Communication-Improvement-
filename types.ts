@@ -26,6 +26,7 @@ export interface AnalysisResult {
   feedback: string[];
   fillerWords: FillerWord[];
   conversation: ConversationTurn[];
+  fluencySpeechRatePercentage: number;
 }
 
 // Types for improvement tracking
@@ -35,8 +36,15 @@ export interface DimensionChange {
   newScore: number;
 }
 
+export interface FluencyChange {
+    oldPercentage: number;
+    newPercentage: number;
+}
+
+
 export interface ComparisonResult {
   dimensionChanges: DimensionChange[];
   improvementSummary: string[];
   areasForNextFocus: string[];
+  fluencyChange: FluencyChange;
 }
