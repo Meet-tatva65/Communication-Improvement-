@@ -18,7 +18,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 const getAiClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API_KEY environment variable not set. Please set it in your Vercel project settings.");
+    throw new Error("API_KEY environment variable not set");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -26,7 +26,6 @@ const getAiClient = () => {
 const analysisSchema = {
   type: Type.OBJECT,
   properties: {
-    overallScore: { type: Type.NUMBER, description: "An overall score from 0 to 5, can be decimal." },
     dimensions: {
       type: Type.ARRAY,
       description: "Scores for the three primary communication dimensions (Clarity, Language Proficiency, Conciseness) on a 0-5 scale.",
@@ -82,7 +81,8 @@ const analysisSchema = {
       },
     },
   },
-  required: ["overallScore", "dimensions", "fluencySpeechRatePercentage", "feedback", "fillerWords", "conversation"],
+  // Note: overallScore is removed from schema requirements as it's calculated client-side now.
+  required: ["dimensions", "fluencySpeechRatePercentage", "feedback", "fillerWords", "conversation"],
 };
 
 const singleAnalysisPrompt = `You are a world-class speech and communication coach. Analyze the user's speech from the provided audio file, which contains a conversation between a 'User' and an 'AI'.
@@ -91,40 +91,88 @@ Instructions:
 1.  Isolate and analyze ONLY the 'User's' speech.
 2.  Provide a full transcript of the entire conversation, labeling each part with 'User' or 'AI'.
 3.  For the 'User's' speech, identify any grammatical mistakes or awkward phrasing. For each mistake, provide the incorrect phrase, a suggested correction, and a brief explanation.
-4.  Rate the user on the following three dimensions ONLY, on a scale of 0 to 5 (can be decimal): 'Clarity', 'Language Proficiency', and 'Conciseness'. Do not include other dimensions like 'Pauses & Hesitation Markers'.
+4.  Rate the user on the following three dimensions ONLY, on a scale of 0 to 5 (can be decimal): 'Clarity', 'Language Proficiency', and 'Conciseness'. Do not include other dimensions like 'Pauses & Hesitation Markers'. The application will calculate the final overall score based on these dimension scores.
 5.  Separately, evaluate the user's 'Fluency / Speech Rate' as a percentage from 0 to 100 and return it in the 'fluencySpeechRatePercentage' field. A higher percentage indicates better performance.
-6.  Calculate an 'overallScore' from 0 to 5, representing a weighted average of the three dimensions rated on the 0-5 scale ('Clarity', 'Language Proficiency', 'Conciseness'). Do NOT include 'Fluency / Speech Rate' in this overall score.
-7.  Provide a list of the most frequently used filler words by the user and their counts.
-8.  Offer a bulleted list of 3-5 clear, actionable 'feedback' points for improvement. As part of the feedback, specifically mention the user's estimated speech rate in words-per-minute (WPM).
-9.  Return the entire analysis in the specified JSON format.`;
+6.  Provide a list of the most frequently used filler words by the user and their counts.
+7.  Offer a bulleted list of 3-5 clear, actionable 'feedback' points for improvement. As part of the feedback, specifically mention the user's estimated speech rate in words-per-minute (WPM).
+8.  Return the entire analysis in the specified JSON format. Do NOT include an 'overallScore' field in your response.`;
 
-export const analyzeAudio = async (audioFile: File): Promise<AnalysisResult> => {
-  const ai = getAiClient();
-  const base64Audio = await fileToBase64(audioFile);
-  const audioPart = { inlineData: { mimeType: audioFile.type, data: base64Audio } };
-  const textPart = { text: singleAnalysisPrompt };
+// Private function to run a single analysis pass
+const _runSingleAnalysis = async (audioFile: File, base64Audio: string): Promise<AnalysisResult> => {
+    const ai = getAiClient();
+    const audioPart = { inlineData: { mimeType: audioFile.type, data: base64Audio } };
+    const textPart = { text: singleAnalysisPrompt };
 
-  try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro',
-      contents: { parts: [textPart, audioPart] },
-      config: { 
-        responseMimeType: "application/json", 
-        responseSchema: analysisSchema,
-        seed: 42, // Use a fixed seed for more deterministic and consistent results.
-      }
+        model: 'gemini-2.5-pro',
+        contents: { parts: [textPart, audioPart] },
+        config: { 
+            responseMimeType: "application/json", 
+            responseSchema: analysisSchema,
+            // Using a different seed for each run in a multi-run setup can help get a better "average" from the model's probabilistic nature.
+            // For now, we'll let it be random by not setting a seed.
+        }
     });
     
-    const result: AnalysisResult = JSON.parse(response.text.trim());
-
-    // Round scores for consistency
-    result.overallScore = parseFloat(result.overallScore.toFixed(2));
-    result.dimensions.forEach((dim: Dimension) => {
-        dim.score = parseFloat(dim.score.toFixed(2));
-    });
-    result.fluencySpeechRatePercentage = Math.round(result.fluencySpeechRatePercentage);
-
+    // The model response won't have overallScore, so we add it with a default value.
+    const result: AnalysisResult = { ...JSON.parse(response.text.trim()), overallScore: 0 };
     return result;
+};
+
+
+export const analyzeAudio = async (audioFile: File): Promise<AnalysisResult> => {
+  const base64Audio = await fileToBase64(audioFile);
+  
+  try {
+    // Run the analysis 3 times in parallel for accuracy
+    const analysisPromises = [
+        _runSingleAnalysis(audioFile, base64Audio),
+        _runSingleAnalysis(audioFile, base64Audio),
+        _runSingleAnalysis(audioFile, base64Audio)
+    ];
+
+    const results = await Promise.all(analysisPromises);
+
+    // --- Averaging Logic ---
+    const numResults = results.length;
+
+    // Use the first result as a template for qualitative data (feedback, transcript, etc.)
+    const finalResult: AnalysisResult = {
+        ...results[0],
+        overallScore: 0,
+        dimensions: [],
+        fluencySpeechRatePercentage: 0,
+    };
+
+    // Average fluency percentage
+    const totalFluency = results.reduce((sum, r) => sum + r.fluencySpeechRatePercentage, 0);
+    finalResult.fluencySpeechRatePercentage = Math.round(totalFluency / numResults);
+
+    // Average dimension scores
+    const dimensionTotals = new Map<string, number>();
+    results.forEach(r => {
+        r.dimensions.forEach(d => {
+            dimensionTotals.set(d.name, (dimensionTotals.get(d.name) || 0) + d.score);
+        });
+    });
+
+    const averagedDimensions: Dimension[] = [];
+    dimensionTotals.forEach((totalScore, name) => {
+        averagedDimensions.push({ name, score: parseFloat((totalScore / numResults).toFixed(2)) });
+    });
+    finalResult.dimensions = averagedDimensions;
+
+    // Deterministically calculate the overallScore from the averaged core dimensions
+    const coreDimensionScores = averagedDimensions
+        .filter(d => ['Clarity', 'Language Proficiency', 'Conciseness'].includes(d.name))
+        .map(d => d.score);
+    
+    if (coreDimensionScores.length > 0) {
+        const totalScore = coreDimensionScores.reduce((sum, score) => sum + score, 0);
+        finalResult.overallScore = parseFloat((totalScore / coreDimensionScores.length).toFixed(2));
+    }
+
+    return finalResult;
 
   } catch (error) {
     console.error("Error analyzing audio with Gemini:", error);

@@ -27,7 +27,7 @@ const App: React.FC = () => {
     setAppState('loading');
     setError(null);
     setAnalysisResult(null);
-    setLoadingMessage('Analyzing... This may take a few moments.');
+    setLoadingMessage('Running 3 analysis passes for improved accuracy...');
     try {
       const result = await analyzeAudio(file);
       setAnalysisResult(result);
@@ -47,15 +47,15 @@ const App: React.FC = () => {
     setNewAnalysisResult(null);
 
     try {
-        setLoadingMessage('Analyzing older audio... (step 1 of 3)');
+        setLoadingMessage('Analyzing older audio (3 passes for accuracy)...');
         const oldResult = await analyzeAudio(oldFile);
         setOldAnalysisResult(oldResult);
 
-        setLoadingMessage('Analyzing newer audio... (step 2 of 3)');
+        setLoadingMessage('Analyzing newer audio (3 passes for accuracy)...');
         const newResult = await analyzeAudio(newFile);
         setNewAnalysisResult(newResult);
 
-        setLoadingMessage('Comparing results... (step 3 of 3)');
+        setLoadingMessage('Comparing results...');
         const comparison = await generateComparisonReport(oldResult, newResult);
         setComparisonResult(comparison);
         
