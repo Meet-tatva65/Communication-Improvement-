@@ -27,7 +27,7 @@ const App: React.FC = () => {
     setAppState('loading');
     setError(null);
     setAnalysisResult(null);
-    setLoadingMessage('Running 3 analysis passes for improved accuracy...');
+    setLoadingMessage('Running 3 analyses for accuracy... This may take a little longer.');
     try {
       const result = await analyzeAudio(file);
       setAnalysisResult(result);

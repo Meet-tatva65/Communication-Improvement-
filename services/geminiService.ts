@@ -97,80 +97,69 @@ Instructions:
 7.  Offer a bulleted list of 3-5 clear, actionable 'feedback' points for improvement. As part of the feedback, specifically mention the user's estimated speech rate in words-per-minute (WPM).
 8.  Return the entire analysis in the specified JSON format. Do NOT include an 'overallScore' field in your response.`;
 
-// Private function to run a single analysis pass
-const _runSingleAnalysis = async (audioFile: File, base64Audio: string): Promise<AnalysisResult> => {
-    const ai = getAiClient();
-    const audioPart = { inlineData: { mimeType: audioFile.type, data: base64Audio } };
-    const textPart = { text: singleAnalysisPrompt };
-
-    const response = await ai.models.generateContent({
-        model: 'gemini-2.5-pro',
-        contents: { parts: [textPart, audioPart] },
-        config: { 
-            responseMimeType: "application/json", 
-            responseSchema: analysisSchema,
-            // Using a different seed for each run in a multi-run setup can help get a better "average" from the model's probabilistic nature.
-            // For now, we'll let it be random by not setting a seed.
-        }
-    });
-    
-    // The model response won't have overallScore, so we add it with a default value.
-    const result: AnalysisResult = { ...JSON.parse(response.text.trim()), overallScore: 0 };
-    return result;
-};
-
 
 export const analyzeAudio = async (audioFile: File): Promise<AnalysisResult> => {
   const base64Audio = await fileToBase64(audioFile);
   
   try {
-    // Run the analysis 3 times in parallel for accuracy
-    const analysisPromises = [
-        _runSingleAnalysis(audioFile, base64Audio),
-        _runSingleAnalysis(audioFile, base64Audio),
-        _runSingleAnalysis(audioFile, base64Audio)
-    ];
+    const ai = getAiClient();
+    const audioPart = { inlineData: { mimeType: audioFile.type, data: base64Audio } };
+    const textPart = { text: singleAnalysisPrompt };
 
-    const results = await Promise.all(analysisPromises);
+    const analysisPromises = Array(3).fill(null).map(() => 
+      ai.models.generateContent({
+          model: 'gemini-2.5-pro',
+          contents: { parts: [textPart, audioPart] },
+          config: { 
+              responseMimeType: "application/json", 
+              responseSchema: analysisSchema,
+          }
+      })
+    );
+    
+    const responses = await Promise.all(analysisPromises);
+    const results: Omit<AnalysisResult, 'overallScore'>[] = responses.map(res => JSON.parse(res.text.trim()));
 
-    // --- Averaging Logic ---
-    const numResults = results.length;
+    // Averaging logic
+    const dimensionSums: { [key: string]: number } = {};
+    let fluencySum = 0;
+    const dimensionCounts: { [key: string]: number } = {};
 
-    // Use the first result as a template for qualitative data (feedback, transcript, etc.)
-    const finalResult: AnalysisResult = {
-        ...results[0],
-        overallScore: 0,
-        dimensions: [],
-        fluencySpeechRatePercentage: 0,
-    };
+    for (const result of results) {
+        for (const dim of result.dimensions) {
+            dimensionSums[dim.name] = (dimensionSums[dim.name] || 0) + dim.score;
+            dimensionCounts[dim.name] = (dimensionCounts[dim.name] || 0) + 1;
+        }
+        fluencySum += result.fluencySpeechRatePercentage;
+    }
 
-    // Average fluency percentage
-    const totalFluency = results.reduce((sum, r) => sum + r.fluencySpeechRatePercentage, 0);
-    finalResult.fluencySpeechRatePercentage = Math.round(totalFluency / numResults);
+    const averagedDimensions: Dimension[] = Object.keys(dimensionSums).map(name => ({
+        name,
+        score: parseFloat((dimensionSums[name] / (dimensionCounts[name] || 1)).toFixed(2)),
+    }));
 
-    // Average dimension scores
-    const dimensionTotals = new Map<string, number>();
-    results.forEach(r => {
-        r.dimensions.forEach(d => {
-            dimensionTotals.set(d.name, (dimensionTotals.get(d.name) || 0) + d.score);
-        });
-    });
+    const averagedFluency = Math.round(fluencySum / results.length);
+    
+    // Take qualitative data from the first result for consistency
+    const representativeResult = results[0];
 
-    const averagedDimensions: Dimension[] = [];
-    dimensionTotals.forEach((totalScore, name) => {
-        averagedDimensions.push({ name, score: parseFloat((totalScore / numResults).toFixed(2)) });
-    });
-    finalResult.dimensions = averagedDimensions;
-
-    // Deterministically calculate the overallScore from the averaged core dimensions
+    // Deterministically calculate the overallScore from the *averaged* core dimensions
     const coreDimensionScores = averagedDimensions
         .filter(d => ['Clarity', 'Language Proficiency', 'Conciseness'].includes(d.name))
         .map(d => d.score);
     
+    let overallScore = 0;
     if (coreDimensionScores.length > 0) {
         const totalScore = coreDimensionScores.reduce((sum, score) => sum + score, 0);
-        finalResult.overallScore = parseFloat((totalScore / coreDimensionScores.length).toFixed(2));
+        overallScore = parseFloat((totalScore / coreDimensionScores.length).toFixed(2));
     }
+
+    const finalResult: AnalysisResult = {
+        ...representativeResult,
+        dimensions: averagedDimensions,
+        fluencySpeechRatePercentage: averagedFluency,
+        overallScore
+    };
 
     return finalResult;
 
